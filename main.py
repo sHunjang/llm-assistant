@@ -22,8 +22,8 @@ def print_welcome() -> None:
     """시작 화면 출력"""
     print("""
 ╔══════════════════════════════════════════╗
-║     🤖 LLM 엔지니어링 AI 멘토            ║
-║     Powered by Gemini 2.0 Flash  v1.0   ║
+║     🤖 LLM 엔지니어링 AI 멘토              ║
+║   Powered by Gemini 2.0 Flash Lite v1.0  ║
 ╚══════════════════════════════════════════╝
 
 💡 커맨드:
@@ -90,7 +90,7 @@ def main() -> None:
     # 핵심 컴포넌트 초기화
     # ─────────────────────────────────────
 
-    MODEL = "gemini-1.5-flash"
+    MODEL = "models/gemini-2.0-flash-lite"
 
     # 1. LLM 클라이언트
     client = LLMClient(model=MODEL)
