@@ -12,17 +12,10 @@ LLM 어시스턴트 메인 실행 파일
     /quit   - 프로그램 종료
 """
 
-from google import generativeai as genai
-from dotenv import load_dotenv
-import os
-
 from assistant.client import LLMClient
 from assistant.conversation import ConversationManager
 from assistant.token_counter import TokenCounter
 from prompts.system_prompts import LLM_MENTOR
-
-# .env 로드
-load_dotenv()
 
 
 def print_welcome() -> None:
@@ -30,7 +23,7 @@ def print_welcome() -> None:
     print("""
 ╔══════════════════════════════════════════╗
 ║     🤖 LLM 엔지니어링 AI 멘토            ║
-║     Powered by Gemini 1.5 Flash  v1.0   ║
+║     Powered by Gemini 2.0 Flash  v1.0   ║
 ╚══════════════════════════════════════════╝
 
 💡 커맨드:
@@ -88,30 +81,6 @@ def handle_command(
     return True
 
 
-def build_client_with_system_prompt(system_prompt: str, model: str) -> LLMClient:
-    """
-    시스템 프롬프트가 적용된 LLMClient 생성
-
-    실무 포인트:
-    Gemini는 system_instruction을 모델 생성 시점에 주입한다.
-    대화 도중에는 변경되지 않으므로
-    system_prompt가 바뀔 때마다 모델을 새로 생성해야 한다.
-    """
-    api_key = os.getenv("GEMINI_API_KEY")
-    genai.configure(api_key=api_key)
-
-    from google.generativeai import GenerativeModel
-    raw_model = GenerativeModel(
-        model_name=model,
-        system_instruction=system_prompt   # ← 핵심: 시스템 프롬프트 주입
-    )
-    
-    # LLMClient 내부 model을 system_instruction이 적용된 것으로 교체
-    client = LLMClient(model=model)
-    client.model = raw_model
-    return client
-
-
 def main() -> None:
     """메인 실행 함수"""
 
@@ -121,18 +90,15 @@ def main() -> None:
     # 핵심 컴포넌트 초기화
     # ─────────────────────────────────────
 
-    MODEL = "gemini-1.5-flash"
+    MODEL = "gemini-2.0-flash"
 
-    # 1. 대화 관리자
+    # 1. LLM 클라이언트
+    client = LLMClient(model=MODEL)
+
+    # 2. 대화 관리자
     conversation = ConversationManager(
         system_prompt=LLM_MENTOR,
         max_history=20
-    )
-
-    # 2. 시스템 프롬프트가 적용된 LLM 클라이언트
-    client = build_client_with_system_prompt(
-        system_prompt=LLM_MENTOR,
-        model=MODEL
     )
 
     # 3. 토큰 카운터
@@ -173,6 +139,7 @@ def main() -> None:
             full_response = ""
             stream = client.chat(
                 messages=messages,
+                system_prompt=conversation.get_system_prompt(),  # 매 요청마다 전달
                 temperature=0.7,
                 max_tokens=1000,
                 stream=True
@@ -189,13 +156,10 @@ def main() -> None:
             conversation.add_assistant_message(full_response)
 
             # 6. 토큰 사용량 업데이트 (근사값)
-            #    Gemini API는 응답 객체에서 정확한 토큰 수를 제공하지만
-            #    스트리밍 모드에서는 근사값으로 계산한다.
             input_tokens  = sum(len(m["parts"]) // 4 for m in messages)
             output_tokens = len(full_response) // 4
             request_cost  = counter.update_usage(input_tokens, output_tokens)
 
-            # 비용이 유의미할 때만 표시
             if request_cost > 0.000001:
                 print(
                     f"   💰 예상 비용: "
