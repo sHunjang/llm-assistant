@@ -13,7 +13,7 @@ Gemini는 현재 무료 티어이지만
 """
 
 from dataclasses import dataclass
-from google import generativeai as genai
+from google import genai
 
 
 # Gemini 모델별 가격 (USD per 1M tokens, 2025년 기준)
