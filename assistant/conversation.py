@@ -97,7 +97,7 @@ class ConversationManager:
         for msg in recent_history:
             messages.append({
                 "role": msg.role,
-                "parts": msg.content
+                "parts": [{"text": msg.content}]
             })
 
         return messages

@@ -156,7 +156,7 @@ def main() -> None:
             conversation.add_assistant_message(full_response)
 
             # 6. 토큰 사용량 업데이트 (근사값)
-            input_tokens  = sum(len(m["parts"]) // 4 for m in messages)
+            input_tokens  = sum(len(m["parts"][0]["text"]) // 4 for m in messages)
             output_tokens = len(full_response) // 4
             request_cost  = counter.update_usage(input_tokens, output_tokens)
 
