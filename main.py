@@ -23,7 +23,7 @@ def print_welcome() -> None:
     print("""
 ╔══════════════════════════════════════════╗
 ║     🤖 LLM 엔지니어링 AI 멘토              ║
-║   Powered by Gemini 2.0 Flash Lite v1.0  ║
+║   Powered by Gemini 2.5 Flash      v1.0  ║
 ╚══════════════════════════════════════════╝
 
 💡 커맨드:
@@ -90,7 +90,7 @@ def main() -> None:
     # 핵심 컴포넌트 초기화
     # ─────────────────────────────────────
 
-    MODEL = "models/gemini-2.0-flash-lite"
+    MODEL = "models/gemini-2.5-flash"
 
     # 1. LLM 클라이언트
     client = LLMClient(model=MODEL)
