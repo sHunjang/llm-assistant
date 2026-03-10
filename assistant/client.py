@@ -26,12 +26,12 @@ class LLMClient:
     - main.py나 다른 모듈은 수정할 필요가 없다 → OCP 원칙
     """
 
-    def __init__(self, model: str = "gemini-2.0-flash"):
+    def __init__(self, model: str = "gemini-1.5-flash"):
         """
         Args:
             model: 사용할 Gemini 모델명
-                   gemini-2.0-flash → 최신, 빠르고 무료 ✅
-                   gemini-2.0-flash-lite → 더 가볍고 빠른 버전
+                   gemini-1.5-flash → 최신, 빠르고 무료 ✅
+                   gemini-1.5-flash-lite → 더 가볍고 빠른 버전
         """
         api_key = os.getenv("GEMINI_API_KEY")
         if not api_key:

@@ -90,7 +90,7 @@ def main() -> None:
     # 핵심 컴포넌트 초기화
     # ─────────────────────────────────────
 
-    MODEL = "gemini-2.0-flash"
+    MODEL = "gemini-1.5-flash"
 
     # 1. LLM 클라이언트
     client = LLMClient(model=MODEL)
