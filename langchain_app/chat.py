@@ -17,14 +17,15 @@ LangChain:
   - ChatGoogleGenerativeAI 한 줄로 초기화
   - HumanMessage, AIMessage 객체로 관리
   - response.content로 바로 접근
-  - ConversationBufferMemory가 히스토리 관리
+  - RunnableWithMessageHistory + ChatMessageHistory가 히스토리 관리
 """
 
 from langchain_google_genai import ChatGoogleGenerativeAI
-from langchain.prompts import ChatPromptTemplate, MessagesPlaceholder
-from langchain.memory import ConversationBufferMemory
+from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.runnables import RunnablePassthrough
+from langchain_core.runnables.history import RunnableWithMessageHistory
+from langchain_community.chat_message_histories import ChatMessageHistory
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -37,9 +38,14 @@ class LangChainChat:
     핵심 컴포넌트:
     1. ChatGoogleGenerativeAI → LLM 모델
     2. ChatPromptTemplate     → 프롬프트 템플릿
-    3. ConversationBufferMemory → 대화 히스토리
+    3. RunnableWithMessageHistory + ChatMessageHistory → 대화 히스토리
     4. StrOutputParser        → 응답 파싱
     5. LCEL Chain (|)         → 전체 파이프라인 연결
+    
+    실무 포인트:
+    session_id를 사용해서 여러 사용자의 대화를
+    독립적으로 관리할 수 있다.
+    → 실제 서비스에서 user_id를 session_id로 활용
     """
 
     def __init__(
@@ -66,35 +72,31 @@ class LangChainChat:
             ("human", "{input}"),
         ])
 
-        # ── 3. 메모리 ────────────────────────────
-        # 직접 구현: ConversationManager 클래스 직접 만들었음
-        # LangChain: ConversationBufferMemory 가 자동 관리
-        # return_messages=True: 메시지 객체 형태로 반환
-        self.memory = ConversationBufferMemory(
-            return_messages=True,
-            memory_key="chat_history"
+        # 세션별 히스토리 저장소
+        # { session_id: ChatMessageHistory }
+        self.store = {}
+
+        # 기본 Chain (히스토리 없음)
+        base_chain = self.prompt | self.llm | StrOutputParser()
+
+        # RunnableWithMessageHistory로 히스토리 자동 관리
+        self.chain = RunnableWithMessageHistory(
+            base_chain,
+            self._get_session_history,      # 세션 히스토리 조회 함수
+            input_messages_key="input",
+            history_messages_key="chat_history",
         )
 
-        # ── 4. 출력 파서 ─────────────────────────
-        # 직접 구현: response.candidates[0].content.parts[0].text
-        # LangChain: StrOutputParser() 가 자동으로 텍스트 추출
-        self.output_parser = StrOutputParser()
-
-        # ── 5. LCEL Chain 조립 ───────────────────
-        # | 연산자로 컴포넌트를 파이프라인처럼 연결
-        # 실행 순서: prompt → llm → output_parser
-        self.chain = (
-            RunnablePassthrough.assign(
-                chat_history=lambda x: self.memory.load_memory_variables({})["chat_history"]
-            )
-            | self.prompt
-            | self.llm
-            | self.output_parser
-        )
-
+        self.session_id = "default"
         print(f"✅ LangChain Chat 초기화 완료 (모델: {model})")
+        
+    def _get_session_history(self, session_id: str) -> ChatMessageHistory:
+        """세션 ID로 히스토리 조회 (없으면 새로 생성)"""
+        if session_id not in self.store:
+            self.store[session_id] = ChatMessageHistory()
+        return self.store[session_id]
 
-    def chat(self, user_input: str) -> str:
+    def chat(self, user_input: str, session_id: str = "default") -> str:
         """
         사용자 입력을 받아 AI 응답 반환
 
@@ -102,6 +104,11 @@ class LangChainChat:
         1. 히스토리를 프롬프트에 주입
         2. LLM 호출
         3. 응답 텍스트 파싱
+
+        session_id 활용 예시:
+        chat("안녕", session_id="user_001")
+        chat("안녕", session_id="user_002")
+        → 두 사용자의 대화가 완전히 독립적으로 관리됨
 
         Args:
             user_input: 사용자 입력 텍스트
@@ -111,19 +118,14 @@ class LangChainChat:
         """
 
         # Chain 실행
-        response = self.chain.invoke({"input": user_input})
-
-        # 메모리에 대화 저장
-        # 직접 구현: conversation.add_user_message() / add_assistant_message()
-        # LangChain: save_context()로 한 번에 저장
-        self.memory.save_context(
+        response = self.chain.invoke(
             {"input": user_input},
-            {"output": response}
-        )
+            config={"configurable": {"session_id": self.session_id}}
+            )
 
         return response
 
-    def stream_chat(self, user_input: str):
+    def stream_chat(self, user_input: str, session_id: str = "default"):
         """
         스트리밍 응답 생성기
 
@@ -132,29 +134,18 @@ class LangChainChat:
         직접 구현했던 _handle_stream()과 동일한 역할.
         """
 
-        # 히스토리 로드
-        chat_history = self.memory.load_memory_variables({})["chat_history"]
-
-        # 스트리밍 실행
-        full_response = ""
-        for chunk in self.chain.stream({
-            "input": user_input,
-            "chat_history": chat_history
-        }):
-            full_response += chunk
+        for chunk in self.chain.stream(
+            {"input": user_input},
+            config={"configurable": {"session_id": session_id}}
+        ):
             yield chunk
 
-        # 메모리 저장
-        self.memory.save_context(
-            {"input": user_input},
-            {"output": full_response}
-        )
-
-    def clear_memory(self) -> None:
+    def clear_memory(self, session_id: str = "default") -> None:
         """대화 히스토리 초기화"""
-        self.memory.clear()
-        print("🗑️  대화 히스토리 초기화 완료")
+        if session_id in self.store:
+            self.store[session_id].clear()
+        print(f"🗑️  세션 '{session_id}' 히스토리 초기화 완료")
 
-    def get_history(self) -> list:
+    def get_history(self, session_id: str = "default") -> list:
         """현재 대화 히스토리 반환"""
-        return self.memory.load_memory_variables({})["chat_history"]
+        return self._get_session_history(session_id).messages
