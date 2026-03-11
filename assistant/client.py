@@ -24,6 +24,10 @@ class LLMClient:
     실무 포인트:
     - 패키지가 바뀌어도 클래스 인터페이스(chat 메서드)는 동일하게 유지
     - main.py나 다른 모듈은 수정할 필요가 없다 → OCP 원칙
+    
+    2단계 변경사항:
+    - chat() 메서드에 tools 파라미터 추가
+    - Function Calling 응답 감지 로직 추가
     """
 
     def __init__(self, model: str = "models/gemini-2.5-flash"):
@@ -51,7 +55,8 @@ class LLMClient:
         system_prompt: str = "",
         temperature: float = 0.7,
         max_tokens: int = 1000,
-        stream: bool = False
+        stream: bool = False,
+        tools: list[dict] | None = None,    # 2단계에서 추가된 파라미터
     ) -> any:
         """
         Gemini에 메시지를 보내고 응답을 받는 핵심 메서드
@@ -59,6 +64,10 @@ class LLMClient:
         신버전 변경 사항:
         - system_prompt를 config에 직접 전달 (모델 생성 시 주입 방식 → 호출 시 주입 방식)
         - types.GenerateContentConfig 사용
+        
+        2단계 추가사항:
+        tools 파라미터로 사용 가능한 도구 목록을 전달하면
+        Gemini가 필요할 때 도구 호출을 요청한다.
 
         Args:
             messages     : 대화 히스토리
@@ -67,16 +76,26 @@ class LLMClient:
             temperature  : 창의성 조절 (0.0 ~ 1.0)
             max_tokens   : 최대 응답 토큰 수
             stream       : True면 스트리밍, False면 일반 응답
+            tools        : 사용 가능한 도구 스팩 목록
+                           None 이면 일반 대화 모드 (1단계와 동일)
+                           전달하면 Function Calling 모드
         """
 
-        # 신버전 설정 방식
+        # tools가 잇으면 Gemini Function Declaration 형식으로 변환
+        gemini_tools = None
+        if tools:
+            gemini_tools = self._build_gemini_tools(tools)
+            
         config = types.GenerateContentConfig(
             system_instruction=system_prompt,
             temperature=temperature,
             max_output_tokens=max_tokens,
+            tools=gemini_tools,    # 도구 목록 전달
         )
-
-        if stream:
+        
+        if stream and not tools:
+            # 스트리밍은 Function Calling과 함께 사용 시 복잡해짐
+            # tools가 없을 때만 스트리밍 사용
             response = self.client.models.generate_content_stream(
                 model=self.model_name,
                 contents=messages,
@@ -90,6 +109,63 @@ class LLMClient:
                 config=config,
             )
             return response
+    
+    def _build_gemini_tools(self, tools: list[dict]) -> list:
+        """
+        우리 도구 스펙 형식을 Gemini FunctinoDeclaration 형식으로 변환
+        
+        실무 포인트:
+            각 LLM API마다 도구 정의 형식이 다르다.
+            이 변환 한수 덕분에 definitions.py는 하나만 유지하면서
+            여러 LLM API에 대응할 수 있다.
+        """
+        
+        function_declarations = []
+        
+        for tool in tools:
+            func_decl = types.FunctionDeclaration(
+                name=tool["name"],
+                description=tool["description"],
+                parameters=tool.get("parameters", {})
+            )
+            function_declarations.append(func_decl)
+        
+        return [types.Tool(function_declarations=function_declarations)]
+
+    
+    def has_tool_call(self, response) -> bool:
+        """
+        응답에 도구 호출 요청이 있는지 확인
+        
+        실무 포인트:
+            Gemini 응답은 두 가지 케이스가 있다.
+            1. 일반 텍스트 응답 -> 바로 출력
+            2. 도구 호출 요청 -> 도구 실행 후 결과 재전송
+            이 메서드로 케이스를 구분한다.
+        """
+        
+        try:
+            return (
+                response.candiates[0].content.parts[0].function_call is not None
+            )
+        
+        except (IndexError, AttributeError):
+            return False
+    
+    def get_tool_call(self, response) -> tuple[str, dict]:
+        """
+        응답에서 도구 호출 정보 추출
+        
+        Returns:
+            (tool_name, tool_args) 튜플
+        """
+        
+        function_call = response.candidates[0].content.parts[0].function_call
+        tool_name = function_call.name
+        tool_args = dict(function_call.args)
+        
+        return tool_name, tool_args
+
 
     def _handle_stream(self, response) -> Iterator[str]:
         """스트리밍 응답 처리"""
