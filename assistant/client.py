@@ -137,6 +137,10 @@ class LLMClient:
         """
         응답에 도구 호출 요청이 있는지 확인
         
+        신버전 google-genai 응답 구조:
+        response.candidates[0].content.parts 를 순회하면서
+        function_call 속성이 있는 part를 찾아야 한다.
+        
         실무 포인트:
             Gemini 응답은 두 가지 케이스가 있다.
             1. 일반 텍스트 응답 -> 바로 출력
@@ -145,10 +149,10 @@ class LLMClient:
         """
         
         try:
-            return (
-                response.candiates[0].content.parts[0].function_call is not None
-            )
-        
+            for part in response.candidates[0].content.parts:
+                if part.function_call is not None:
+                    return True
+            return False
         except (IndexError, AttributeError):
             return False
     
@@ -160,11 +164,13 @@ class LLMClient:
             (tool_name, tool_args) 튜플
         """
         
-        function_call = response.candidates[0].content.parts[0].function_call
-        tool_name = function_call.name
-        tool_args = dict(function_call.args)
-        
-        return tool_name, tool_args
+        for part in response.candidates[0].content.parts:
+            if part.function_call is not None:
+                tool_name = part.function_call.name
+                tool_args = dict(part.function_call.args)
+                return tool_name, tool_args
+
+        raise ValueError("응답에 function_call이 없습니다.")
 
 
     def _handle_stream(self, response) -> Iterator[str]:

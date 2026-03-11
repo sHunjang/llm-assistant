@@ -97,6 +97,26 @@ def handle_command(
 
     return True
 
+def _extract_text(response) -> str:
+    """
+    Gemini 응답에서 텍스트만 추출하는 헬퍼 함수
+
+    실무 포인트:
+    Gemini 응답의 parts는 여러 타입이 섞일 수 있다.
+    - text part     → 일반 텍스트
+    - function_call → 도구 호출 요청
+    텍스트 part만 골라서 합쳐야 한다.
+    """
+    texts = []
+    try:
+        for part in response.candidates[0].content.parts:
+            if hasattr(part, "text") and part.text:
+                texts.append(part.text)
+    except (IndexError, AttributeError):
+        pass
+    return "".join(texts)
+
+
 def run_function_calling_loop(
     client: LLMClient,
     messages: list[dict],
@@ -105,6 +125,10 @@ def run_function_calling_loop(
 ) -> str:
     """
     Function Calling 실행 루프
+
+    수정사항:
+    - response.text 대신 parts에서 텍스트 직접 추출
+    - Function Call 응답엔 text가 None이므로 parts를 순회해야 함
 
     실무 포인트:
     이 함수가 2단계의 핵심이다.
@@ -151,6 +175,7 @@ def run_function_calling_loop(
             input_tokens  = sum(
                 len(m["parts"][0]["text"]) // 4
                 for m in current_messages
+                if isinstance(m["parts"][0], dict) and "text" in m["parts"][0]
             )
             output_tokens = len(final_text) // 4
             counter.update_usage(input_tokens, output_tokens)
@@ -262,13 +287,6 @@ def main() -> None:
             print(full_response)
 
             # 4. AI 응답 히스토리에 추가
-            conversation.add_assistant_message(full_response)
-            
-            
-
-            print()  # 줄바꿈
-
-            # 5. AI 응답을 히스토리에 추가
             conversation.add_assistant_message(full_response)
 
             # 6. 토큰 사용량 업데이트 (근사값)
