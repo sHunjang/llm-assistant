@@ -10,12 +10,19 @@ LLM 어시스턴트 메인 실행 파일
     /stats  - 토큰 사용량 및 비용 통계
     /save   - 현재 대화를 파일로 저장
     /quit   - 프로그램 종료
+    
+2단계 변경사항:
+- 도구 실행 루프 추가
+- Function Calling 흐름 구현
 """
 
+import json
 from assistant.client import LLMClient
 from assistant.conversation import ConversationManager
 from assistant.token_counter import TokenCounter
 from prompts.system_prompts import LLM_MENTOR
+from tools.definitions import ALL_TOOLS
+from tools.executor import execute_tool
 
 
 def print_welcome() -> None:
@@ -23,8 +30,13 @@ def print_welcome() -> None:
     print("""
 ╔══════════════════════════════════════════╗
 ║     🤖 LLM 엔지니어링 AI 멘토              ║
-║   Powered by Gemini 2.5 Flash      v1.0  ║
+║   Powered by Gemini 2.5 Flash      v2.0  ║
 ╚══════════════════════════════════════════╝
+
+🛠️  사용 가능한 도구:
+   날씨 조회    → "서울 날씨 알려줘"
+   계산기       → "1234 * 5678 계산해줘"
+   현재 시간    → "지금 몇 시야?"
 
 💡 커맨드:
    /help   → 도움말
@@ -57,6 +69,11 @@ def handle_command(
    /stats  → 토큰 사용량 및 비용 통계
    /save   → 현재 대화를 파일로 저장
    /quit   → 프로그램 종료
+
+🛠️  사용 가능한 도구:
+   날씨 조회    → "서울 날씨 알려줘"
+   계산기       → "1234 * 5678 계산해줘"
+   현재 시간    → "지금 몇 시야?"
 """)
 
     elif cmd == "/clear":
@@ -80,6 +97,104 @@ def handle_command(
 
     return True
 
+def run_function_calling_loop(
+    client: LLMClient,
+    messages: list[dict],
+    system_prompt: str,
+    counter: TokenCounter,
+) -> str:
+    """
+    Function Calling 실행 루프
+
+    실무 포인트:
+    이 함수가 2단계의 핵심이다.
+    도구 호출이 끝날 때까지 반복하는 구조인데
+    이게 바로 나중에 배울 LangGraph Agent의 기본 원리야.
+
+    흐름:
+    1. 메시지 + 도구 목록 → Gemini 전송
+    2. Gemini → 도구 호출 요청 응답
+    3. 도구 실행
+    4. 결과를 대화에 추가
+    5. Gemini에 재전송 → 최종 답변
+    6. 최종 답변이 나올 때까지 반복
+
+    Args:
+        client      : LLM 클라이언트
+        messages    : 현재까지의 대화 히스토리
+        system_prompt: 시스템 프롬프트
+        counter     : 토큰 카운터
+
+    Returns:
+        최종 AI 응답 텍스트
+    """
+    
+    current_messages = messages.copy()
+    max_iterations = 5   # 무한 루프 방지 (실무에서는 필수.)
+    
+    for iteration in range(max_iterations):
+        
+        # ── Step 1: Gemini에 요청 ──────────────────
+        response = client.chat(
+            messages=current_messages,
+            system_prompt=system_prompt,
+            temperature=0.7,
+            max_tokens=1000,
+            stream=False,
+            tools=ALL_TOOLS
+        )
+
+        # ── Step 2: 도구 호출 여부 확인 ───────────
+        if not client.has_tool_call(response):
+            # 도구 호출 없음 → 최종 텍스트 응답
+            final_text = response.text
+            input_tokens  = sum(
+                len(m["parts"][0]["text"]) // 4
+                for m in current_messages
+            )
+            output_tokens = len(final_text) // 4
+            counter.update_usage(input_tokens, output_tokens)
+            return final_text
+
+        # ── Step 3: 도구 정보 추출 ────────────────
+        tool_name, tool_args = client.get_tool_call(response)
+        print(f"\n   🔧 도구 호출: {tool_name}({tool_args})")
+
+        # ── Step 4: 도구 실행 ─────────────────────
+        tool_result = execute_tool(tool_name, tool_args)
+        print(f"   📦 도구 결과: {json.dumps(tool_result, ensure_ascii=False)}")
+
+        # ── Step 5: 대화에 도구 호출/결과 추가 ────
+        # Gemini Function Calling 프로토콜:
+        # AI의 도구 호출 요청과 실행 결과를 대화 히스토리에 추가해야
+        # 다음 요청에서 AI가 결과를 참고할 수 있다.
+
+        # AI의 도구 호출 요청을 히스토리에 추가
+        current_messages.append({
+            "role": "model",
+            "parts": [{
+                "function_call": {
+                    "name": tool_name,
+                    "args": tool_args
+                }
+            }]
+        })
+
+        # 도구 실행 결과를 히스토리에 추가
+        current_messages.append({
+            "role": "user",
+            "parts": [{
+                "function_response": {
+                    "name": tool_name,
+                    "response": tool_result
+                }
+            }]
+        })
+
+        # ── Step 6: 다음 반복으로 → 최종 답변 요청
+
+    # max_iterations 초과 시 (비정상 상황)
+    return "죄송합니다. 도구 실행 중 문제가 발생했습니다."
 
 def main() -> None:
     """메인 실행 함수"""
@@ -133,22 +248,23 @@ def main() -> None:
             # 2. API 전송용 메시지 목록 준비
             messages = conversation.get_messages_for_api()
 
-            # 3. 스트리밍 응답 받기
+            # 3. Function Calling 루프 실행
+            #    도구가 필요하면 자동으로 실행하고 최종 답변 반환
             print("\n🤖 AI: ", end="", flush=True)
 
-            full_response = ""
-            stream = client.chat(
+            full_response = run_function_calling_loop(
+                client=client,
                 messages=messages,
-                system_prompt=conversation.get_system_prompt(),  # 매 요청마다 전달
-                temperature=0.7,
-                max_tokens=1000,
-                stream=True
+                system_prompt=conversation.get_system_prompt(),
+                counter=counter
             )
+            
+            print(full_response)
 
-            # 4. 스트리밍 청크를 실시간으로 출력
-            for chunk in stream:
-                print(chunk, end="", flush=True)
-                full_response += chunk
+            # 4. AI 응답 히스토리에 추가
+            conversation.add_assistant_message(full_response)
+            
+            
 
             print()  # 줄바꿈
 
