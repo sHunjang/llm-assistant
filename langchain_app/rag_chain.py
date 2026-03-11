@@ -23,7 +23,8 @@ LangChain RAG:
   커스터마이징이 가능하다.
 """
 
-from langchain_google_genai import ChatGoogleGenerativeAI, GoogleGenerativeAIEmbeddings
+from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_community.document_loaders import PyPDFLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_chroma import Chroma
@@ -76,8 +77,8 @@ class LangChainRAG:
         # GoogleGenerativeAIEmbeddings 사용 시
         # 별도 모델 다운로드 없이 API로 임베딩 가능
         # 단, API 호출 비용 발생 (무료 티어 범위 내)
-        self.embeddings = GoogleGenerativeAIEmbeddings(
-            model="models/embedding-001"
+        self.embeddings = HuggingFaceEmbeddings(
+            model_name="jhgan/ko-sroberta-multitask"
         )
 
         # ── 3. 텍스트 분할기 ─────────────────────
