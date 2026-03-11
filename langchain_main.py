@@ -131,7 +131,7 @@ def run_memory_comparison() -> None:
     print("커맨드: /summary → 요약 확인, /quit → 종료\n")
 
     window_chat  = WindowMemoryChat(model=DEFAULT_MODEL, window_size=5)
-    summary_chat = SummaryMemoryChat(model=DEFAULT_MODEL, max_token_limit=300)
+    summary_chat = SummaryMemoryChat(model=DEFAULT_MODEL, max_turns=6)
 
     while True:
         user_input = input("\n👤 나: ").strip()
