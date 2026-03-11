@@ -21,3 +21,6 @@ conversation_*.txt
 .DS_Store
 Thumbs.db
 EOF
+
+# data 폴더 업로드 X
+/data
