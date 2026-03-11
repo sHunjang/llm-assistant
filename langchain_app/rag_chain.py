@@ -25,9 +25,9 @@ LangChain RAG:
 
 from langchain_google_genai import ChatGoogleGenerativeAI, GoogleGenerativeAIEmbeddings
 from langchain_community.document_loaders import PyPDFLoader
-from langchain.text_splitter import RecursiveCharacterTextSplitter
+from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_chroma import Chroma
-from langchain.prompts import ChatPromptTemplate
+from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.runnables import RunnablePassthrough
 from dotenv import load_dotenv
@@ -39,13 +39,13 @@ class LangChainRAG:
     """
     LangChain 기반 RAG 파이프라인 클래스
 
-    3단계와 비교:
+    3단계 직접 구현 vs LangChain 비교:
     ─────────────────────────────────────────
     DocumentLoader    → PyPDFLoader
     TextChunker       → RecursiveCharacterTextSplitter
     Embedder          → GoogleGenerativeAIEmbeddings
     VectorStore       → Chroma
-    RAGRetriever      → retriever = vectorstore.as_retriever()
+    RAGRetriever      → vectorstore.as_retriever()
 
     실무 포인트:
     RecursiveCharacterTextSplitter가
@@ -157,7 +157,7 @@ class LangChainRAG:
 
     def _build_chain(self) -> None:
         """
-        RAG Chain 구성
+        LCEL RAG Chain 구성
 
         LCEL 파이프라인:
         retriever → prompt → llm → output_parser
