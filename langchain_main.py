@@ -11,6 +11,11 @@ from langchain_app.chat import LangChainChat
 from langchain_app.rag_chain import LangChainRAG
 from langchain_app.memory_chat import WindowMemoryChat, SummaryMemoryChat
 from prompts.system_prompts import LLM_MENTOR
+import os
+from dotenv import load_dotenv
+load_dotenv()
+
+DEFAULT_MODEL = os.getenv("DEFAULT_MODEL", "gemini-2.5-flash")
 
 
 def print_welcome() -> None:
@@ -36,6 +41,7 @@ def run_basic_chat() -> None:
     print("커맨드: /clear → 초기화, /history → 히스토리, /quit → 종료\n")
 
     chat = LangChainChat(
+        model=DEFAULT_MODEL,
         system_prompt=LLM_MENTOR,
         temperature=0.7
     )
@@ -78,7 +84,10 @@ def run_rag_chat() -> None:
     print("\n📌 모드: RAG 채팅 (LangChain RAG)")
     print("커맨드: /quit → 종료\n")
 
-    rag = LangChainRAG(top_k=3)
+    rag = LangChainRAG(
+        model=DEFAULT_MODEL,
+        top_k=3,
+        )
 
     # PDF 파일 경로 입력
     while True:
@@ -121,8 +130,8 @@ def run_memory_comparison() -> None:
     print("Summary Memory → 오래된 대화를 자동 요약\n")
     print("커맨드: /summary → 요약 확인, /quit → 종료\n")
 
-    window_chat   = WindowMemoryChat(window_size=5)
-    summary_chat  = SummaryMemoryChat(max_token_limit=300)
+    window_chat  = WindowMemoryChat(model=DEFAULT_MODEL, window_size=5)
+    summary_chat = SummaryMemoryChat(model=DEFAULT_MODEL, max_token_limit=300)
 
     while True:
         user_input = input("\n👤 나: ").strip()
