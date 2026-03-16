@@ -181,6 +181,7 @@ with gr.Blocks(title="LLM Assistant") as demo:
             chat_history = gr.Chatbot(
                 height=450,
                 label="대화",
+                type="messages"
             )
             chat_input = gr.Textbox(
                 placeholder="메시지를 입력하세요...",
@@ -228,7 +229,7 @@ with gr.Blocks(title="LLM Assistant") as demo:
                     rag_history = gr.Chatbot(
                         height=400,
                         label="대화",
-    
+                        type="messages"
                     )
                     rag_input = gr.Textbox(
                         placeholder="문서에 대해 질문하세요...",
@@ -264,6 +265,7 @@ with gr.Blocks(title="LLM Assistant") as demo:
             agent_chatbot = gr.Chatbot(
                 height=450,
                 label="Agent 대화",
+                type="messages"
             )
             agent_input = gr.Textbox(
                 placeholder="예: 서울 날씨 알려주고 1234*5678 계산해줘",
