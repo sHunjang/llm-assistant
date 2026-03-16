@@ -1,0 +1,12 @@
+2026-03-16 15:06:38 | INFO     | demo | 애플리케이션 시작
+2026-03-16 15:06:38 | INFO     | demo | {"event": "llm_call", "model": "gemini-2.0-flash-lite", "input_tokens": 150, "output_tokens": 200, "total_tokens": 350, "latency_ms": 823.4, "success": true}
+2026-03-16 15:06:38 | INFO     | demo | {"event": "rag_search", "query_length": 6, "num_results": 3, "top_score": 0.85, "latency_ms": 45.2}
+2026-03-16 15:06:38 | WARNING  | demo | Rate Limit 임박 | {"remaining_calls": 5}
+2026-03-16 15:06:38 | INFO     | core.cache | 응답 캐시 초기화 완료 (활성화)
+2026-03-16 15:06:38 | INFO     | core.cache | 캐시 히트 | {"prompt_length": 14}
+2026-03-16 15:06:38 | ERROR    | __main__ | {"event": "rate_limit_exceeded", "error_type": "LLMRateLimitError", "error_message": "일일 요청 한도를 초과했습니다. | details: {'retry_after': 43}"}
+2026-03-16 15:06:38 | ERROR    | __main__ | {"event": "config_missing", "error_type": "ConfigError", "error_message": "GEMINI_API_KEY가 설정되지 않았습니다. | details: {'env_var': 'GEMINI_API_KEY'}"}
+2026-03-16 15:06:57 | INFO     | evaluation.rag_evaluator | RAG 평가기 초기화 완료
+2026-03-16 15:06:59 | INFO     | evaluation.rag_evaluator | 평가 완료 | {"relevancy": 1.0, "faithfulness": 1.0, "context": 1.0, "overall": 1.0}
+2026-03-16 15:07:01 | INFO     | evaluation.rag_evaluator | 평가 완료 | {"relevancy": 1.0, "faithfulness": 1.0, "context": 1.0, "overall": 1.0}
+2026-03-16 15:07:04 | INFO     | evaluation.rag_evaluator | 평가 완료 | {"relevancy": 1.0, "faithfulness": 1.0, "context": 0.0, "overall": 0.667}
