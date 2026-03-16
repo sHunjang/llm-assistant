@@ -24,3 +24,8 @@ EOF
 
 # data 폴더 업로드 X
 /data
+
+chroma_db/
+chroma_langchain_db/
+data/
+logs/
