@@ -318,4 +318,11 @@ with gr.Blocks(title="LLM Assistant") as demo:
 
 
 if __name__ == "__main__":
-    demo.launch(server_name="0.0.0.0", server_port=7860, ssr_mode=False)
+    demo.launch(
+        server_name="0.0.0.0",
+        server_port=7860,
+        share=False,
+        # share=True: 외부 공유 링크 생성
+        theme=gr.themes.Soft()
+        # HuggingFace Spaces 배포 시 False
+    )
