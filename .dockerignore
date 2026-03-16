@@ -1,0 +1,33 @@
+# Git
+.git
+.gitignore
+
+# Python
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.egg-info
+
+# 환경 설정 (보안상 제외!)
+.env
+
+# 가상환경
+venv/
+env/
+.venv/
+
+# Vector DB (재생성 가능)
+chroma_db/
+chroma_langchain_db/
+
+# 로그
+logs/
+
+# 데이터
+data/
+
+# IDE
+.vscode/
+.idea/
