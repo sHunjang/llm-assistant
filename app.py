@@ -5,6 +5,10 @@ Gradio UI — HuggingFace Spaces 배포용
 1. 일반 채팅   → LangChain Chat
 2. RAG 채팅    → PDF 업로드 + 질문
 3. AI Agent   → 날씨, 계산, 시간 도구
+
+실무 포인트:
+Lazy Loading으로 각 탭 첫 사용 시에만 모델 로딩
+→ 앱 시작 시간 단축 + 메모리 절약
 """
 
 import os
@@ -20,13 +24,32 @@ load_dotenv()
 
 DEFAULT_MODEL = os.getenv("DEFAULT_MODEL", "gemini-2.0-flash-lite")
 
-# ── 싱글톤 초기화 ────────────────────────────
-chat_instance = LangChainChat(model=DEFAULT_MODEL)
-rag_instance = LangChainRAG(model=DEFAULT_MODEL)
-agent_app = create_agent_graph(model=DEFAULT_MODEL)
-
-# Agent 세션 히스토리
+# ── Lazy Loading 싱글톤 ──────────────────────
+_chat_instance = None
+_rag_instance = None
+_agent_app = None
 agent_history: list = []
+
+
+def get_chat() -> LangChainChat:
+    global _chat_instance
+    if _chat_instance is None:
+        _chat_instance = LangChainChat(model=DEFAULT_MODEL)
+    return _chat_instance
+
+
+def get_rag() -> LangChainRAG:
+    global _rag_instance
+    if _rag_instance is None:
+        _rag_instance = LangChainRAG(model=DEFAULT_MODEL)
+    return _rag_instance
+
+
+def get_agent():
+    global _agent_app
+    if _agent_app is None:
+        _agent_app = create_agent_graph(model=DEFAULT_MODEL)
+    return _agent_app
 
 
 # ══════════════════════════════════════════
@@ -34,12 +57,11 @@ agent_history: list = []
 # ══════════════════════════════════════════
 
 def chat_respond(message: str, history: list) -> tuple[str, list]:
-    """일반 채팅 응답"""
     if not message.strip():
         return "", history
 
     try:
-        response = chat_instance.chat(
+        response = get_chat().chat(
             user_input=message,
             session_id="gradio_chat"
         )
@@ -53,8 +75,8 @@ def chat_respond(message: str, history: list) -> tuple[str, list]:
 
 
 def chat_clear() -> tuple[list, list]:
-    """채팅 히스토리 초기화"""
-    chat_instance.clear_memory("gradio_chat")
+    if _chat_instance is not None:
+        get_chat().clear_memory("gradio_chat")
     return [], []
 
 
@@ -63,29 +85,27 @@ def chat_clear() -> tuple[list, list]:
 # ══════════════════════════════════════════
 
 def rag_index(file) -> str:
-    """PDF 인덱싱"""
     if file is None:
         return "❌ PDF 파일을 업로드해주세요."
 
     try:
-        chunks = rag_instance.index_document(file.name)
+        chunks = get_rag().index_document(file.name)
         return f"✅ 인덱싱 완료! {chunks}개 청크 저장됨"
     except Exception as e:
         return f"❌ 인덱싱 실패: {str(e)}"
 
 
 def rag_respond(question: str, history: list) -> tuple[str, list]:
-    """RAG 질문 응답"""
     if not question.strip():
         return "", history
 
-    if rag_instance.chain is None:
+    if get_rag().chain is None:
         history.append({"role": "user", "content": question})
         history.append({"role": "assistant", "content": "❌ PDF를 먼저 업로드해주세요."})
         return "", history
 
     try:
-        answer = rag_instance.ask(question)
+        answer = get_rag().ask(question)
         history.append({"role": "user", "content": question})
         history.append({"role": "assistant", "content": answer})
     except Exception as e:
@@ -100,7 +120,6 @@ def rag_respond(question: str, history: list) -> tuple[str, list]:
 # ══════════════════════════════════════════
 
 def agent_respond(message: str, history: list) -> tuple[str, list]:
-    """Agent 실행"""
     global agent_history
 
     if not message.strip():
@@ -110,7 +129,7 @@ def agent_respond(message: str, history: list) -> tuple[str, list]:
 
     try:
         final_response = None
-        for state in agent_app.stream(
+        for state in get_agent().stream(
             {"messages": agent_history},
             stream_mode="values"
         ):
@@ -121,7 +140,6 @@ def agent_respond(message: str, history: list) -> tuple[str, list]:
             history.append({"role": "assistant", "content": "❌ Agent 응답 없음"})
             return "", history
 
-        # 결과 파싱
         new_messages = final_response["messages"][len(agent_history):]
         final_answer = ""
         tools_used = []
@@ -134,14 +152,12 @@ def agent_respond(message: str, history: list) -> tuple[str, list]:
                 elif msg.content:
                     final_answer = msg.content
 
-        # 도구 사용 표시
         if tools_used:
             tools_str = ", ".join(tools_used)
             display = f"🔧 사용 도구: {tools_str}\n\n{final_answer}"
         else:
             display = final_answer
 
-        # 히스토리 업데이트
         last_msg = final_response["messages"][-1]
         if isinstance(last_msg, AIMessage) and last_msg.content:
             agent_history.append(last_msg)
@@ -157,7 +173,6 @@ def agent_respond(message: str, history: list) -> tuple[str, list]:
 
 
 def agent_clear() -> tuple[list, list]:
-    """Agent 히스토리 초기화"""
     global agent_history
     agent_history = []
     return [], []
@@ -188,7 +203,6 @@ with gr.Blocks(title="LLM Assistant") as demo:
                 label="입력",
                 lines=1
             )
-
             with gr.Row():
                 chat_send = gr.Button("전송", variant="primary")
                 chat_clear_btn = gr.Button("초기화")
@@ -272,7 +286,6 @@ with gr.Blocks(title="LLM Assistant") as demo:
                 label="입력",
                 lines=1
             )
-
             with gr.Row():
                 agent_send = gr.Button("실행", variant="primary")
                 agent_clear_btn = gr.Button("초기화")
