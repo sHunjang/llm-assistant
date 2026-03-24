@@ -1,4 +1,4 @@
-"""
+﻿"""
 LangChain 기반 RAG Chain 모듈
 
 실무 포인트:
@@ -23,7 +23,7 @@ LangChain RAG:
   커스터마이징이 가능하다.
 """
 
-from langchain_google_genai import ChatGoogleGenerativeAI
+from core.llm_factory import create_llm
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_community.document_loaders import PyPDFLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
@@ -67,7 +67,7 @@ class LangChainRAG:
         self.persist_directory = persist_directory
 
         # ── 1. LLM 초기화 ────────────────────────
-        self.llm = ChatGoogleGenerativeAI(
+        self.llm = create_llm(
             model=model,
             temperature=0.3,    # RAG는 낮은 temperature 권장
         )
@@ -129,32 +129,58 @@ class LangChainRAG:
           loader = PyPDFLoader(file_path)
           docs = loader.load_and_split(splitter)  # 끝!
         """
+        
+        from pathlib import Path
+        import hashlib
+        
+        # ── 파일 해시로 중복 체크 ────────────────
+        # 같은 파일이면 재인덱싱 없이 기존 DB 재사용
+        file_hash = hashlib.md5(
+            Path(file_path).read_bytes()
+        ).hexdigest()[:8]
+        
+        collection_name = f"rag_{file_hash}"
+        
+        # 기존 Vector DB 재사용 시도
+        try:
+            existing = Chroma(
+                collection_name=collection_name,
+                embedding_function=self.embeddings,
+                persist_directory=self.persist_directory,
+            )
+            count = existing.get()["ids"]
+            
+            if count:
+                print(f"✅ 기존 인덱싱 재사용 ({len(count)}개 청크)")
+                self.vectorstore = existing
+                self._build_chain()
+                return len(count)
+        except Exception:
+            pass
 
+        # 새로 인덱싱
         print(f"{'='*50}")
         print(f"📥 문서 인덱싱 시작: {file_path}")
         print(f"{'='*50}\n")
 
-        # Step 1: PDF 로딩 + 청킹 (한 번에!)
         print("📄 PDF 로딩 및 청킹 중...")
         loader = PyPDFLoader(file_path)
         documents = loader.load_and_split(self.text_splitter)
         print(f"   ✅ {len(documents)}개 청크 생성\n")
 
-        # Step 2: 임베딩 + Vector DB 저장 (한 번에!)
-        # Chroma.from_documents()가 임베딩 + 저장을 자동 처리
         print("🧠 임베딩 및 Vector DB 저장 중...")
         self.vectorstore = Chroma.from_documents(
             documents=documents,
             embedding=self.embeddings,
+            collection_name=collection_name,
             persist_directory=self.persist_directory
         )
         print(f"   ✅ Vector DB 저장 완료\n")
 
-        # Step 3: RAG Chain 구성
         self._build_chain()
-
         print(f"✅ 인덱싱 완료! {len(documents)}개 청크 저장\n")
         return len(documents)
+        
 
     def _build_chain(self) -> None:
         """

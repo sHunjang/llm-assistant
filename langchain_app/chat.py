@@ -1,4 +1,4 @@
-"""
+﻿"""
 LangChain 기본 채팅 모듈
 
 실무 포인트:
@@ -20,7 +20,7 @@ LangChain:
   - RunnableWithMessageHistory + ChatMessageHistory가 히스토리 관리
 """
 
-from langchain_google_genai import ChatGoogleGenerativeAI
+from core.llm_factory import create_llm
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.runnables import RunnablePassthrough
@@ -57,7 +57,7 @@ class LangChainChat:
         # ── 1. LLM 초기화 ────────────────────────
         # 직접 구현: genai.Client(api_key=...) + 모델 설정
         # LangChain: 한 줄로 끝!
-        self.llm = ChatGoogleGenerativeAI(
+        self.llm = create_llm(
             model=model,
             temperature=temperature,
         )

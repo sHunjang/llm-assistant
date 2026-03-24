@@ -1,4 +1,4 @@
-"""
+﻿"""
 LangGraph Agent 그래프 정의
 
 실무 포인트:
@@ -14,7 +14,7 @@ LangGraph의 핵심은 "상태 기반 그래프"이다.
   └── 답변 완성 → [END]
 """
 
-from langchain_google_genai import ChatGoogleGenerativeAI
+from core.llm_factory import create_llm
 from langchain_core.messages import SystemMessage
 from langgraph.graph import StateGraph, START, END
 from langgraph.prebuilt import ToolNode, tools_condition
@@ -55,17 +55,26 @@ def create_agent_graph(
         model = os.getenv("DEFAULT_MODEL", "gemini-2.0-flash-lite")
 
     if system_prompt is None:
-        system_prompt = (
-            "당신은 유능한 AI 어시스턴트입니다. "
-            "질문에 답하기 위해 필요한 도구를 적극적으로 활용하세요. "
-            "도구 사용 후에는 결과를 바탕으로 친절하게 답변하세요. "
-            "한국어로 답변하세요."
-        )
+        system_prompt = """
+            You are an advanced AI agent that can reason, decide, and use tools effectively.
+            ## Core Behavior
+            - Always understand the user\'s intent first.
+            - Decide whether to answer directly or use a tool.
+            - Prefer tool usage when the question requires external or domain-specific knowledge.
+            ## Tool Usage Policy
+            1. search_knowledge: Use for AI/tech topics (LangChain, LangGraph, RAG, LLM, etc.)
+            2. get_weather: Use for any weather-related query
+            3. calculate: Use for any mathematical computation
+            4. get_current_time: Use when user asks about current time/date
+            ## Response Style
+            - Always respond in Korean
+            - Be concise but informative
+        """
 
     # ── 1. LLM + 도구 바인딩 ────────────────────
     # bind_tools: LLM에게 "이런 도구들을 쓸 수 있어" 알려줌
     # 2단계 Function Calling과 동일한 개념
-    llm = ChatGoogleGenerativeAI(
+    llm = create_llm(
         model=model,
         temperature=temperature,
     )
