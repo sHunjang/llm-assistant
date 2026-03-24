@@ -13,6 +13,10 @@ Lazy Loading으로 각 탭 첫 사용 시에만 모델 로딩
 
 import os
 import gradio as gr
+
+GRADIO_MAJOR = int(gr.__version__.split(".")[0])
+CHATBOT_KWARGS = {"type": "messages"} if GRADIO_MAJOR < 6 else {}
+
 from dotenv import load_dotenv
 
 from langchain_app.chat import LangChainChat
@@ -66,7 +70,7 @@ def chat_respond(message: str, history: list):
 
     try:
         full_response = ""
-        for chunk in chat_instance.stream_chat(
+        for chunk in get_chat().stream_chat(
             user_input=message,
             session_id="gradio_chat"
         ):
@@ -209,7 +213,7 @@ with gr.Blocks(title="LLM Assistant") as demo:
             chat_history = gr.Chatbot(
                 height=450,
                 label="대화",
-                type="messages"
+                **CHATBOT_KWARGS
             )
             chat_input = gr.Textbox(
                 placeholder="메시지를 입력하세요...",
@@ -232,7 +236,7 @@ with gr.Blocks(title="LLM Assistant") as demo:
                 outputs=[chat_input, chat_history]
             )
             chat_clear_btn.click(
-                chat_clear,
+                agent_clear,
                 outputs=[chat_input, chat_history]
             )
             
@@ -272,7 +276,7 @@ with gr.Blocks(title="LLM Assistant") as demo:
                     rag_history = gr.Chatbot(
                         height=400,
                         label="대화",
-                        type="messages"
+                        **CHATBOT_KWARGS
                     )
                     rag_input = gr.Textbox(
                         placeholder="문서에 대해 질문하세요...",
@@ -308,7 +312,7 @@ with gr.Blocks(title="LLM Assistant") as demo:
             agent_chatbot = gr.Chatbot(
                 height=450,
                 label="Agent 대화",
-                type="messages"
+                **CHATBOT_KWARGS
             )
             agent_input = gr.Textbox(
                 placeholder="예: 서울 날씨 알려주고 1234*5678 계산해줘",

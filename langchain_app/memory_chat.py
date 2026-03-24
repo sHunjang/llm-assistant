@@ -1,4 +1,4 @@
-"""
+﻿"""
 LangChain Memory 기반 대화 모듈
 
 실무 포인트:
@@ -21,7 +21,7 @@ ConversationSummaryBufferMemory
   → 실무 프로덕션 환경에서 가장 많이 사용
 """
 
-from langchain_google_genai import ChatGoogleGenerativeAI
+from core.llm_factory import create_llm
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.runnables.history import RunnableWithMessageHistory
@@ -51,7 +51,7 @@ class WindowMemoryChat:
         self.window_size = window_size
         self.history = ChatMessageHistory()
         
-        self.llm = ChatGoogleGenerativeAI(
+        self.llm = create_llm(
             model=model,
             temperature=temperature,
         )
@@ -128,7 +128,7 @@ class SummaryMemoryChat:
         self.summary = ""           # 누적 요약본
         self.history = ChatMessageHistory()
 
-        self.llm = ChatGoogleGenerativeAI(
+        self.llm = create_llm(
             model=model,
             temperature=temperature,
         )

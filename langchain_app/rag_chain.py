@@ -1,4 +1,4 @@
-"""
+﻿"""
 LangChain 기반 RAG Chain 모듈
 
 실무 포인트:
@@ -23,7 +23,7 @@ LangChain RAG:
   커스터마이징이 가능하다.
 """
 
-from langchain_google_genai import ChatGoogleGenerativeAI
+from core.llm_factory import create_llm
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_community.document_loaders import PyPDFLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
@@ -67,7 +67,7 @@ class LangChainRAG:
         self.persist_directory = persist_directory
 
         # ── 1. LLM 초기화 ────────────────────────
-        self.llm = ChatGoogleGenerativeAI(
+        self.llm = create_llm(
             model=model,
             temperature=0.3,    # RAG는 낮은 temperature 권장
         )
@@ -139,7 +139,7 @@ class LangChainRAG:
             Path(file_path).read_bytes()
         ).hexdigest()[:8]
         
-        collection_name = f"rag_{file_path}"
+        collection_name = f"rag_{file_hash}"
         
         # 기존 Vector DB 재사용 시도
         try:
