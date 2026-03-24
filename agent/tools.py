@@ -17,6 +17,11 @@ from langchain_core.tools import tool
 from datetime import datetime
 import random
 
+import os
+import requests
+from langchain_core.tools import tool
+from datetime import datetime
+
 
 @tool
 def get_weather(city: str) -> str:
@@ -29,24 +34,53 @@ def get_weather(city: str) -> str:
     Returns:
         날씨 정보 문자열
     """
-    # 실무에서는 실제 날씨 API 호출
-    # 여기서는 Mock 데이터로 대체
-    weather_data = {
-        "서울": {"temp": 18, "condition": "맑음", "humidity": 45},
-        "부산": {"temp": 22, "condition": "구름 조금", "humidity": 60},
-        "제주": {"temp": 20, "condition": "흐림", "humidity": 75},
-        "대구": {"temp": 25, "condition": "맑음", "humidity": 40},
-        "인천": {"temp": 17, "condition": "안개", "humidity": 80},
-    }
+    
+    api_key = os.getenv("OPENWEATHER_API_KEY")
+    
+    # API 키 없으면 Mock 데이터 사용
+    if not api_key:
+        weather_data = {
+            "서울": {"temp": 18, "condition": "맑음", "humidity": 45},
+            "부산": {"temp": 22, "condition": "구름 조금", "humidity": 60},
+            "제주": {"temp": 20, "condition": "흐림", "humidity": 75},
+        }
+        if city in weather_data:
+            data = weather_data[city]
+            return (
+                f"{city} 현재 날씨: {data['condition']}, "
+                f"기온 {data['temp']}°C, 습도 {data['humidity']}%"
+            )
+        return f"{city}의 날씨 정보를 찾을 수 없습니다."
+    
+    # 실제 API 호출
+    try:
+        url = "https://api.openweathermap.org/data/2.5/weather"
+        params = {
+            "q": city,
+            "appid": api_key,
+            "units": "metric",
+            "lang": "kr"
+        }
+        response = requests.get(url, params=params, timeout=5)
+        data = response.json()
+        
+        if response.status_code == 200:
+            temp = data["main"]["temp"]
+            feels_like = data["main"]["feels_like"]
+            humidity = data["main"]["humidity"]
+            condition = data["weather"][0]["description"]
+            wind = data["wind"]["speed"]
+            
+            return (
+                f"{city} 현재 날씨: {condition}, "
+                f"기온 {temp:.1f}°C (체감 {feels_like:.1f}°C), "
+                f"습도 {humidity}%, 풍속 {wind}m/s"
+            )
+        else:
+            return f"날씨 정보를 가져올 수 없습니다: {data.get('message', '알 수 없는 오류')}"
 
-    if city in weather_data:
-        data = weather_data[city]
-        return (
-            f"{city} 현재 날씨: {data['condition']}, "
-            f"기온 {data['temp']}°C, "
-            f"습도 {data['humidity']}%"
-        )
-    return f"{city}의 날씨 정보를 찾을 수 없습니다."
+    except Exception as e:
+        return f"날씨 API 오류: {str(e)}"
 
 
 @tool
@@ -102,32 +136,55 @@ def search_knowledge(query: str) -> str:
     Returns:
         관련 지식 문자열
     """
-    # 실무에서는 실제 검색 API (Google, Tavily 등) 호출
-    # 여기서는 Mock 데이터로 대체
-    knowledge_base = {
-        "LangGraph": (
-            "LangGraph는 LangChain 팀이 만든 상태 기반 AI Agent 프레임워크입니다. "
-            "그래프 구조로 복잡한 Agent 워크플로우를 구현할 수 있으며, "
-            "조건부 분기, 루프, 병렬 처리를 지원합니다."
-        ),
-        "RAG": (
-            "RAG(Retrieval-Augmented Generation)는 외부 문서를 검색해서 "
-            "LLM의 답변 품질을 높이는 기술입니다. "
-            "환각(Hallucination)을 줄이고 최신 정보를 활용할 수 있습니다."
-        ),
-        "LangChain": (
-            "LangChain은 LLM 기반 애플리케이션 개발 프레임워크입니다. "
-            "프롬프트 관리, 체인 구성, 메모리 관리 등을 제공하며 "
-            "LCEL(LangChain Expression Language)로 파이프라인을 구성합니다."
-        ),
-    }
 
-    # 키워드 매칭
-    for key, value in knowledge_base.items():
-        if key.lower() in query.lower():
-            return value
+    api_key = os.getenv("TAVILY_API_KEY")
 
-    return f"'{query}'에 대한 검색 결과를 찾을 수 없습니다."
+    # API 키 없으면 Mock 데이터 사용
+    if not api_key:
+        knowledge_base = {
+            "LangGraph": (
+                "LangGraph는 LangChain 팀이 만든 상태 기반 AI Agent 프레임워크입니다. "
+                "그래프 구조로 복잡한 Agent 워크플로우를 구현할 수 있으며, "
+                "조건부 분기, 루프, 병렬 처리를 지원합니다."
+            ),
+            "RAG": (
+                "RAG(Retrieval-Augmented Generation)는 외부 문서를 검색해서 "
+                "LLM의 답변 품질을 높이는 기술입니다."
+            ),
+            "LangChain": (
+                "LangChain은 LLM 기반 애플리케이션 개발 프레임워크입니다."
+            ),
+        }
+        for key, value in knowledge_base.items():
+            if key.lower() in query.lower():
+                return value
+        return f"'{query}'에 대한 검색 결과를 찾을 수 없습니다."
+    
+    # 실제 Tavily API 호출
+    try:
+        from tavily import TavilyClient
+        client = TavilyClient(api_key=api_key)
+        response = client.search(
+            query=query,
+            max_results=3,
+            search_depth="basic",
+        )
+        
+        results = response.get("results", [])
+        if not results:
+            return f"'{query}'에 대한 검색 결과가 없음."
+        
+        # 결과 포맷팅
+        output = []
+        for r in results[:3]:
+            title = r.get("title", "")
+            content = r.get("content", "")[:200]
+            output.append(f"• {title}: {content}")
+        
+        return "\n".join(output)
+    
+    except Exception as e:
+        return f"검색 오류: {str(e)}"
 
 
 # 도구 목록 (graph.py에서 import해서 사용)

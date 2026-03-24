@@ -56,28 +56,41 @@ def get_agent():
 # 탭 1 — 일반 채팅
 # ══════════════════════════════════════════
 
-def chat_respond(message: str, history: list) -> tuple[str, list]:
+def chat_respond(message: str, history: list):
     if not message.strip():
-        return "", history
+        yield "", history
+        return
+
+    history.append({"role": "user", "content": message})
+    history.append({"role": "assistant", "content": ""})
 
     try:
-        response = get_chat().chat(
+        full_response = ""
+        for chunk in chat_instance.stream_chat(
             user_input=message,
             session_id="gradio_chat"
-        )
-        history.append({"role": "user", "content": message})
-        history.append({"role": "assistant", "content": response})
+        ):
+            full_response += chunk
+            history[-1]["content"] = full_response
+            yield "", history
+
     except Exception as e:
-        history.append({"role": "user", "content": message})
-        history.append({"role": "assistant", "content": f"❌ 오류: {str(e)}"})
-
-    return "", history
+        history[-1]["content"] = f"❌ 오류: {str(e)}"
+        yield "", history
 
 
-def chat_clear() -> tuple[list, list]:
-    if _chat_instance is not None:
-        get_chat().clear_memory("gradio_chat")
-    return [], []
+def export_chat(history: list) -> str:
+    """대화 내용을 텍스트로 내보내기"""
+    if not history:
+        return "대화 내용이 없습니다."
+
+    lines = []
+    for msg in history:
+        role = "나" if msg["role"] == "user" else "AI"
+        lines.append(f"[{role}] {msg['content']}")
+        lines.append("")
+
+    return "\n".join(lines)
 
 
 # ══════════════════════════════════════════
@@ -206,6 +219,7 @@ with gr.Blocks(title="LLM Assistant") as demo:
             with gr.Row():
                 chat_send = gr.Button("전송", variant="primary")
                 chat_clear_btn = gr.Button("초기화")
+                chat_export_btn = gr.Button("내보내기")
 
             chat_send.click(
                 chat_respond,
@@ -220,6 +234,21 @@ with gr.Blocks(title="LLM Assistant") as demo:
             chat_clear_btn.click(
                 chat_clear,
                 outputs=[chat_input, chat_history]
+            )
+            
+            chat_export = gr.Textbox(
+                label="대화 내보내기",
+                lines=5,
+                visible=False
+            )
+            
+            chat_export_btn.click(
+                export_chat,
+                inputs=[chat_history],
+                outputs=[chat_export]
+            ).then(
+                lambda: gr.Textbox(visible=True),
+                outputs=[chat_export]
             )
 
         # ── 탭 2: RAG 채팅 ───────────────────
